@@ -1,0 +1,61 @@
+name: Build latest (Android)
+# trigger via either push to selected branches or on manual run
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-android
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/setup-java@v4.2.1
+        with:
+          # The Java version to set up. Takes a whole or semver Java version. See examples of supported syntax in README file
+          java-version: 22# optional
+          # Java distribution. See the list of supported distributions in README file
+          distribution: oracle
+          # Name of the build platform to cache dependencies. It can be "maven", "gradle" or "sbt".
+          cache: gradle # optional
+          # The path to a dependency file: pom.xml, build.gradle, build.sbt, etc. This option can be used with the `cache` option. If this option is omitted, the action searches for the dependency file in the entire repository. This option supports wildcards and a list of file names for caching multiple dependencies.
+          cache-dependency-path: android/build.gradle # optional
+      
+      - name: Compile Android build
+        shell: bash
+        id: compile
+        run: |
+          cd android
+          ./gradlew
+
+
+      - uses: ./.github/actions/notify_failure
+        if: ${{ always() && steps.compile.outcome == 'failure' }}
+        with:
+          NOTIFY_MESSAGE: 'Failed to compile 32 bit Linux build'
+          WEBHOOK_URL: '${{ secrets.WEBHOOK_URL }}'
+      
+      
+      - uses: ./.github/actions/upload_build
+        if: ${{ always() && steps.compile.outcome == 'success' }}
+        with:
+          SOURCE_FILE: 'src/cc-nix32-gl1'
+          DEST_NAME: 'ClassiCube-Linux32-OpenGL'
+          
+      - uses: ./.github/actions/upload_build
+        if: ${{ always() && steps.compile.outcome == 'success' }}
+        with:
+          SOURCE_FILE: 'src/cc-nix32-gl2'
+          DEST_NAME: 'ClassiCube-Linux32-ModernGL'
+          
+          
+      - uses: ./.github/actions/notify_success
+        if: ${{ always() && steps.compile.outcome == 'success' }}
+        with:
+          DESTINATION_URL: '${{ secrets.NOTIFY_URL }}'
+          WORKFLOW_NAME: 'linux32'
